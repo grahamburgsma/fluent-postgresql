@@ -86,6 +86,7 @@ extension PostgreSQLDatabase: QuerySupporting {
                 return (.identifier(val.key), val.value)
             }
             update.predicate = fluent.predicate
+            update.returning.append(.all)
             query = .update(update)
         case ._delete:
             var delete: PostgreSQLDelete = .delete(fluent.table)
