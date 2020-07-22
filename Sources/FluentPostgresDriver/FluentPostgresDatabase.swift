@@ -13,16 +13,8 @@ extension _FluentPostgresDatabase: Database {
         query: DatabaseQuery,
         onOutput: @escaping (DatabaseOutput) -> ()
     ) -> EventLoopFuture<Void> {
-        var expression = SQLQueryConverter(delegate: PostgresConverterDelegate())
+        let expression = SQLQueryConverter(delegate: PostgresConverterDelegate())
             .convert(query)
-        switch query.action {
-        case .create:
-            expression = PostgresReturningID(
-                base: expression,
-                idKey: query.customIDKey ?? .id
-            )
-        default: break
-        }
         let (sql, binds) = self.serialize(expression)
         self.logger.debug("\(sql) \(binds)")
         do {
@@ -139,18 +131,5 @@ extension _FluentPostgresDatabase: PostgresDatabase {
     
     func withConnection<T>(_ closure: @escaping (PostgresConnection) -> EventLoopFuture<T>) -> EventLoopFuture<T> {
         self.database.withConnection(closure)
-    }
-}
-
-private struct PostgresReturningID: SQLExpression {
-    let base: SQLExpression
-    let idKey: FieldKey
-
-    func serialize(to serializer: inout SQLSerializer) {
-        serializer.statement {
-            $0.append(self.base)
-            $0.append("RETURNING")
-            $0.append(SQLIdentifier(self.idKey.description))
-        }
     }
 }
