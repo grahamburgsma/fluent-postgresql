@@ -1,4 +1,5 @@
 import FluentSQL
+import SQLKit
 
 struct _FluentPostgresDatabase {
     let database: PostgresDatabase
@@ -13,8 +14,12 @@ extension _FluentPostgresDatabase: Database {
         query: DatabaseQuery,
         onOutput: @escaping (DatabaseOutput) -> ()
     ) -> EventLoopFuture<Void> {
-        let expression = SQLQueryConverter(delegate: PostgresConverterDelegate())
+        var expression = SQLQueryConverter(delegate: PostgresConverterDelegate())
             .convert(query)
+        if !query.returning, case .create = query.action {
+            let id = query.customIDKey ?? .id
+            expression = PostgresReturningID(base: expression, idKey: id)
+        }
         let (sql, binds) = self.serialize(expression)
         self.logger.debug("\(sql) \(binds)")
         do {
@@ -131,5 +136,17 @@ extension _FluentPostgresDatabase: PostgresDatabase {
     
     func withConnection<T>(_ closure: @escaping (PostgresConnection) -> EventLoopFuture<T>) -> EventLoopFuture<T> {
         self.database.withConnection(closure)
+    }
+}
+
+private struct PostgresReturningID: SQLExpression {
+    let base: SQLExpression
+    let idKey: FieldKey
+
+    func serialize(to serializer: inout SQLSerializer) {
+        serializer.statement {
+            $0.append(self.base)
+            $0.append(SQLReturning([SQLIdentifier(idKey.description)]))
+        }
     }
 }
